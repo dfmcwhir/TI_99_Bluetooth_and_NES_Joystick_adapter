@@ -1,0 +1,5 @@
+(sym_lib_table
+	(version 7)
+	(lib (name "SparkFun") (type "Legacy") (uri "${KIPRJMOD}/SparkFun/SparkFun-Boards.lib") (options "") (descr ""))
+	(lib (name "unijoysticle-rescue") (type "Legacy") (uri "${KIPRJMOD}/TI99_BT_NES_Joystick_Adapter-rescue.lib") (options "") (descr ""))
+)
