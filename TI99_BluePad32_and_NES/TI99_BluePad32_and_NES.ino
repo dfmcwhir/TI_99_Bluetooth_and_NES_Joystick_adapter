@@ -19,6 +19,9 @@
 #include <pins_arduino.h>
 #include <NESControllerInterface.h>
 
+//set to false stop DEBUG_SERIAL debug info output
+#define DEBUG false
+
 //Define ESP joystick output pins
 #define J1_UP 26
 #define J1_DN 18
@@ -37,12 +40,13 @@
 #define J2_LED 13
 
 //Define NES controller pins
-#define NES1_CLK 33
-#define NES1_LOAD 34
+#define NES_CLK 33
+#define NES_LOAD 16
 #define NES1_DATA 35
-#define NES2_CLK 36
-#define NES2_LOAD 39
 #define NES2_DATA 21
+#define DELAYTIMEMICROSECONDS 6
+
+
 
 //Define BT/NES Select switch pin
 #define BT_NES_SEL 22
@@ -50,6 +54,22 @@
 //Ids of for BT joystick 1 and 2
 int j1Id = 0;
 int j2Id = 1;
+
+const int NESBTNSCOUNT = 8;
+bool nes1Btns[NESBTNSCOUNT];
+bool nes2Btns[NESBTNSCOUNT]; 
+
+const char* btnNames[8] = {
+  "A",
+  "B",
+  "Select",
+  "Start",
+  "Up",
+  "Down",
+  "Left",
+  "Right"
+};
+
 
 //Counter for how long the BT clear button has been pressed
 int resetLoopCount = 0;
@@ -60,9 +80,7 @@ bool useBT = true;
 //BT controller
 ControllerPtr myControllers[BP32_MAX_GAMEPADS];
 
-//Constructor for the NES controllers
-NESControllerInterface nes1(NES1_DATA, NES1_LOAD, NES1_CLK);
-NESControllerInterface nes2(NES1_DATA, NES1_LOAD, NES1_CLK);
+#define DEBUG_SERIAL if (DEBUG) Serial
 
 // This callback gets called any time a new gamepad is connected.
 // Up to 4 gamepads can be connected at the same time.
@@ -70,11 +88,11 @@ void onConnectedController(ControllerPtr ctl) {
     bool foundEmptySlot = false;
     for (int i = 0; i < BP32_MAX_GAMEPADS; i++) {
         if (myControllers[i] == nullptr) {
-            Serial.printf("CALLBACK: Controller is connected, index=%d\n", i);
+            DEBUG_SERIAL.printf("CALLBACK: Controller is connected, index=%d\n", i);
             // Additionally, you can get certain gamepad properties like:
             // Model, VID, PID, BTAddr, flags, etc.
             ControllerProperties properties = ctl->getProperties();
-            Serial.printf("Controller model: %s, VID=0x%04x, PID=0x%04x\n", ctl->getModelName().c_str(), properties.vendor_id,
+            DEBUG_SERIAL.printf("Controller model: %s, VID=0x%04x, PID=0x%04x\n", ctl->getModelName().c_str(), properties.vendor_id,
                            properties.product_id);
             myControllers[i] = ctl;
             foundEmptySlot = true;
@@ -88,7 +106,7 @@ void onConnectedController(ControllerPtr ctl) {
         }
     }
     if (!foundEmptySlot) {
-        Serial.println("CALLBACK: Controller connected, but could not found empty slot");
+        DEBUG_SERIAL.println("CALLBACK: Controller connected, but could not found empty slot");
     }
 }
 
@@ -97,7 +115,7 @@ void onDisconnectedController(ControllerPtr ctl) {
 
     for (int i = 0; i < BP32_MAX_GAMEPADS; i++) {
         if (myControllers[i] == ctl) {
-            Serial.printf("CALLBACK: Controller disconnected from index=%d\n", i);
+            DEBUG_SERIAL.printf("CALLBACK: Controller disconnected from index=%d\n", i);
             myControllers[i] = nullptr;
             foundController = true;
             if (i==0) {
@@ -111,12 +129,12 @@ void onDisconnectedController(ControllerPtr ctl) {
     }
 
     if (!foundController) {
-        Serial.println("CALLBACK: Controller disconnected, but not found in myControllers");
+        DEBUG_SERIAL.println("CALLBACK: Controller disconnected, but not found in myControllers");
     }
 }
 
 void dumpGamepad(ControllerPtr ctl) {
-    Serial.printf(
+    DEBUG_SERIAL.printf(
         "idx=%d, dpad: 0x%02x, buttons: 0x%04x, axis L: %4d, %4d, axis R: %4d, %4d, brake: %4d, throttle: %4d, "
         "misc: 0x%02x, gyro x:%6d y:%6d z:%6d, accel x:%6d y:%6d z:%6d\n",
         ctl->index(),        // Controller Index
@@ -141,7 +159,7 @@ void dumpGamepad(ControllerPtr ctl) {
 }
 
 void dumpMouse(ControllerPtr ctl) {
-    Serial.printf("idx=%d, buttons: 0x%04x, scrollWheel=0x%04x, delta X: %4d, delta Y: %4d\n",
+    DEBUG_SERIAL.printf("idx=%d, buttons: 0x%04x, scrollWheel=0x%04x, delta X: %4d, delta Y: %4d\n",
                    ctl->index(),        // Controller Index
                    ctl->buttons(),      // bitmask of pressed buttons
                    ctl->scrollWheel(),  // Scroll Wheel
@@ -174,24 +192,24 @@ void dumpKeyboard(ControllerPtr ctl) {
         "Right Control", "Right Shift", "Right Alt", "Right Meta",
         // clang-format on
     };
-    Serial.printf("idx=%d, Pressed keys: ", ctl->index());
+    DEBUG_SERIAL.printf("idx=%d, Pressed keys: ", ctl->index());
     for (int key = Keyboard_A; key <= Keyboard_UpArrow; key++) {
         if (ctl->isKeyPressed(static_cast<KeyboardKey>(key))) {
             const char* keyName = key_names[key-4];
-            Serial.printf("%s,", keyName);
+            DEBUG_SERIAL.printf("%s,", keyName);
        }
     }
     for (int key = Keyboard_LeftControl; key <= Keyboard_RightMeta; key++) {
         if (ctl->isKeyPressed(static_cast<KeyboardKey>(key))) {
             const char* keyName = modifier_names[key-0xe0];
-            Serial.printf("%s,", keyName);
+            DEBUG_SERIAL.printf("%s,", keyName);
         }
     }
     Console.printf("\n");
 }
 
 void dumpBalanceBoard(ControllerPtr ctl) {
-    Serial.printf("idx=%d,  TL=%u, TR=%u, BL=%u, BR=%u, temperature=%d\n",
+    DEBUG_SERIAL.printf("idx=%d,  TL=%u, TR=%u, BL=%u, BR=%u, temperature=%d\n",
                    ctl->index(),        // Controller Index
                    ctl->topLeft(),      // top-left scale
                    ctl->topRight(),     // top-right scale
@@ -212,7 +230,7 @@ void processGamepad(ControllerPtr ctl) {
         } else {
             digitalWrite(J1_FIRE, LOW);
         }
-        Serial.printf("idx=%d, up=%d, dn=%d, right=%d, left=%d, fire=%d\n", ctl->index(), (ctl->dpad() & 1),((ctl->dpad() & 2) >>1), ((ctl->dpad() & 4) >>2),((ctl->dpad() & 8) >>3),ctl->buttons());
+        DEBUG_SERIAL.printf("idx=%d, up=%d, dn=%d, right=%d, left=%d, fire=%d\n", ctl->index(), (ctl->dpad() & 1),((ctl->dpad() & 2) >>1), ((ctl->dpad() & 4) >>2),((ctl->dpad() & 8) >>3),ctl->buttons());
     }
     if (ctl->index() == j2Id) {
         digitalWrite(J2_UP, (ctl->dpad() & 1));
@@ -224,7 +242,7 @@ void processGamepad(ControllerPtr ctl) {
         } else {
             digitalWrite(J2_FIRE, LOW);
         }
-         Serial.printf("idx=%d, up=%d, dn=%d, right=%d, left=%d, fire=%d\n", ctl->index(), (ctl->dpad() & 1),((ctl->dpad() & 2) >>1), ((ctl->dpad() & 4) >>2),((ctl->dpad() & 8) >>3),ctl->buttons());
+         DEBUG_SERIAL.printf("idx=%d, up=%d, dn=%d, right=%d, left=%d, fire=%d\n", ctl->index(), (ctl->dpad() & 1),((ctl->dpad() & 2) >>1), ((ctl->dpad() & 4) >>2),((ctl->dpad() & 8) >>3),ctl->buttons());
 
     }   
 
@@ -253,21 +271,21 @@ void processKeyboard(ControllerPtr ctl) {
     // This is just an example.
     if (ctl->isKeyPressed(Keyboard_A)) {
         // Do Something
-        Serial.println("Key 'A' pressed");
+        DEBUG_SERIAL.println("Key 'A' pressed");
     }
 
     // Don't do "else" here.
     // Multiple keys can be pressed at the same time.
     if (ctl->isKeyPressed(Keyboard_LeftShift)) {
         // Do something else
-        Serial.println("Key 'LEFT SHIFT' pressed");
+        DEBUG_SERIAL.println("Key 'LEFT SHIFT' pressed");
     }
 
     // Don't do "else" here.
     // Multiple keys can be pressed at the same time.
     if (ctl->isKeyPressed(Keyboard_LeftArrow)) {
         // Do something else
-        Serial.println("Key 'Left Arrow' pressed");
+        DEBUG_SERIAL.println("Key 'Left Arrow' pressed");
     }
 
     // See "dumpKeyboard" for possible things to query.
@@ -296,20 +314,81 @@ void processControllers() {
             } else if (myController->isBalanceBoard()) {
                 processBalanceBoard(myController);
             } else {
-                Serial.println("Unsupported controller");
+                DEBUG_SERIAL.println("Unsupported controller");
             }
         }
     }
 }
 
 void processNEScontrollers() {
+    int nes1BtnPressed = 0;
+    int nes2BtnPressed = 0;
+    String s = String();
+    digitalWrite(NES_CLK, LOW);
+    digitalWrite(NES_LOAD, HIGH);
+    delayMicroseconds(DELAYTIMEMICROSECONDS * 2);
+    digitalWrite(NES_LOAD, LOW);
+    delayMicroseconds(DELAYTIMEMICROSECONDS);
 
-
+    for (int i = 0; i < NESBTNSCOUNT; i++) {
+        nes1Btns[i] = !digitalRead(NES1_DATA);
+        nes2Btns[i] = !digitalRead(NES2_DATA);
+        digitalWrite(NES_CLK, HIGH);
+        delayMicroseconds(DELAYTIMEMICROSECONDS);
+        digitalWrite(NES_CLK, LOW);
+        delayMicroseconds(DELAYTIMEMICROSECONDS);
+        nes1BtnPressed += nes1Btns[i];
+        nes2BtnPressed += nes2Btns[i];
+        switch (i) {
+            case 1:
+                digitalWrite(J1_FIRE,nes1Btns[0]|nes1Btns[i]);
+                digitalWrite(J2_FIRE,nes2Btns[0]|nes2Btns[i]);
+                break;
+            case 4:
+                digitalWrite(J1_UP,nes1Btns[i]);
+                digitalWrite(J2_UP,nes2Btns[i]);
+                break;
+            case 5:
+                digitalWrite(J1_DN,nes1Btns[i]);
+                digitalWrite(J2_DN,nes2Btns[i]);
+                break;
+            case 6:
+                digitalWrite(J1_LT,nes1Btns[i]);
+                digitalWrite(J2_LT,nes2Btns[i]);
+                break;
+            case 7:
+                digitalWrite(J1_RT,nes1Btns[i]);
+                digitalWrite(J2_RT,nes2Btns[i]);
+                break;
+            default:
+                break;
+        }
+    }
+    if (nes1BtnPressed>0) {
+        digitalWrite(J1_LED,HIGH);
+    } else {
+        digitalWrite(J1_LED,LOW);
+    }
+    if (nes2BtnPressed>0) {
+        digitalWrite(J2_LED,HIGH);
+    } else {
+        digitalWrite(J2_LED,LOW);
+    }
+    s= "NES1: ";
+    for (int i = 0; i < NESBTNSCOUNT; i++) {
+        s = s + btnNames[i] + ":" + nes1Btns[i] + " ";
+    }
+    DEBUG_SERIAL.println(s);
+    s= "NES2: ";
+    for (int i = 0; i < NESBTNSCOUNT; i++) {
+        s = s + btnNames[i] + ":" + nes2Btns[i] + " ";
+    }
+    DEBUG_SERIAL.println(s);
 }
 
 // Arduino setup function. Runs in CPU 1
 void setup() {
-    Serial.begin(115200);
+    DEBUG_SERIAL.begin(115200);
     pinMode(J1_UP, OUTPUT);
     pinMode(J1_DN, OUTPUT);
     pinMode(J1_LT, OUTPUT);
@@ -323,16 +402,17 @@ void setup() {
 
     pinMode(J1_LED, OUTPUT);
     pinMode(J2_LED, OUTPUT);
-
+    digitalWrite(J1_LED,LOW);
+    digitalWrite(J2_LED,LOW);
     pinMode(JBUTTON, INPUT_PULLUP);
     
     pinMode(BT_NES_SEL, INPUT);
-    delay(10);
+    delay(100);
     if(digitalRead(BT_NES_SEL)) {
         //If BT/NES Sel switch is HIGH, use BT controllers
         useBT = true;
         const uint8_t* addr = BP32.localBdAddress();
-        Serial.printf("BD Addr: %2X:%2X:%2X:%2X:%2X:%2X\n", addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
+        DEBUG_SERIAL.printf("BD Addr: %2X:%2X:%2X:%2X:%2X:%2X\n", addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
         // Setup the Bluepad32 callbacks
         BP32.setup(&onConnectedController, &onDisconnectedController);
         // Enables mouse / touchpad support for gamepads that support them.
@@ -341,13 +421,20 @@ void setup() {
         // - Second one, which is a "virtual device", is a mouse.
         // By default, it is disabled.
         BP32.enableVirtualDevice(false);
+        DEBUG_SERIAL.printf("Firmware: %s\n", BP32.firmwareVersion());
+        DEBUG_SERIAL.println("Waiting for BT gamepads to connect");
 
     } else {
         // If BT/NES Sel switch is LOW, use NES controllers
         useBT = false;
-    }
-    Serial.printf("Firmware: %s\n", BP32.firmwareVersion());  
-  
+        pinMode(NES_LOAD, OUTPUT);
+        pinMode(NES_CLK, OUTPUT);
+        digitalWrite(NES_LOAD, LOW);
+        digitalWrite(NES_CLK, LOW);
+        pinMode(NES1_DATA, INPUT_PULLUP);
+        pinMode(NES2_DATA, INPUT_PULLUP);
+        DEBUG_SERIAL.println("Waiting for input from NES controller(s)");
+    } 
 }
 
 // Arduino loop function. Runs in CPU 1.
@@ -364,7 +451,6 @@ void loop() {
         // If your main loop doesn't have one, just add a simple `vTaskDelay(1)`.
         // Detailed info here:
         // https://stackoverflow.com/questions/66278271/task-watchdog-got-triggered-the-tasks-did-not-reset-the-watchdog-in-time
-        vTaskDelay(1);
         if (digitalRead(JBUTTON)==LOW) {
             ++resetLoopCount ;
         } else {
@@ -375,22 +461,7 @@ void loop() {
             BP32.forgetBluetoothKeys();
         }
     } else {
-        NESInput input1 = nes1.getNESInput();
-        
-        digitalWrite(J1_FIRE, input1.anyButtonPressed());
-        digitalWrite(J1_UP, input1.buttonUp);
-        digitalWrite(J1_DN, input1.buttonDown);
-        digitalWrite(J1_LT, input1.buttonLeft);
-        digitalWrite(J1_RT, input1.buttonRight);
-        
-        NESInput input2 = nes2.getNESInput();
-        digitalWrite(J2_FIRE, input2.anyButtonPressed());
-        digitalWrite(J2_UP, input2.buttonUp);
-        digitalWrite(J2_DN, input2.buttonDown);
-        digitalWrite(J2_LT, input2.buttonLeft);
-        digitalWrite(J2_RT, input2.buttonRight);
-
-
+        processNEScontrollers();
     }
     // The main loop must have some kind of "yield to lower priority task" event.
     // Otherwise, the watchdog will get triggered.
