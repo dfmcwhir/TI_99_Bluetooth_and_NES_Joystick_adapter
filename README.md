@@ -4,7 +4,7 @@ Uses Bluepad32 with the Arduino IDE on a WEMOS ESP32 D1 board. See https://bluep
 <p>
 Boards made by and available from PCBWay.com</p>
 
-!(Assembled.jpg)
+![Assembled Device](Assembled.jpg)
 
 <h2>Theory of operation</h2>
 <p>
