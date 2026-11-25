@@ -4,6 +4,8 @@ Uses Bluepad32 with the Arduino IDE on a WEMOS ESP32 D1 board. See https://bluep
 <p>
 Boards made by and available from PCBWay.com</p>
 
+!Assembled.jpg
+
 <h2>Theory of operation</h2>
 <p>
 The TI99/4A's joystick port scans the up,down,left,right, and fire signals using two joystick scan lines (one for each joystick), similar to the way it scans the keyboard rows and columns. So to interface with that circuit, the ESP32 control analog switch ICs (CD4066) to simulate the connection between the scan lines the input signals the same way a button being pressed on a stock controller would.</p>
