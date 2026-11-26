@@ -2,7 +2,8 @@
 <p>
 Uses Bluepad32 with the Arduino IDE on a WEMOS ESP32 D1 board. See https://bluepad32.readthedocs.io/en/latest/plat_arduino/ for Bluepad32 installation instructions. The NES gamepad code is based on the NESControllerInterface library by https://harryslab.net/nes-controller-breakout-board/ for the NES controllers </p>
 <p>
-Boards made by and available from PCBWay.com</p>
+Boards made by and available from PCBWay.com: <br>
+https://www.pcbway.com/project/shareproject/TI99_4a_Bluetooth_and_NES_Joystick_Adapter_bd76dbdd.html</p>
 
 ![Assembled Device](Assembled.jpg)
 
